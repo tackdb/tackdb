@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 )
 
 type Command func(...string) (string, error)
@@ -26,6 +27,7 @@ type store struct {
 	tables   []table
 	count    counter
 	commands map[string]Command
+	mu       sync.RWMutex
 }
 
 func NewStore() (s *store) {

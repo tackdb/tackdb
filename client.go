@@ -5,6 +5,7 @@ import (
 	"container/list"
 	"errors"
 	"io"
+	"log"
 	"net"
 	"strings"
 )
@@ -13,11 +14,12 @@ import (
 // 	GetCommandTable() map[string]Command
 // }
 
-// client should read first line
+// client should peek first line
 // if the first line is an AUTH statement,
 // authenticate client and then connect
 // if first line is not authenticate,
 // try to add to pool
+// Maintains a connection to the client.
 type client struct {
 	conn     net.Conn
 	id       int64
@@ -26,34 +28,37 @@ type client struct {
 	commands map[string]Command
 }
 
-func (c *client) Listen() {
+func (c *client) Run() {
 	defer c.conn.Close()
 	var err error
 
+	log.Println(c.id)
+
 	for {
-		if err = c.Accept(); err != nil {
+		if err = c.ReadCommand(); err != nil {
 			break
 		}
 	}
 }
 
-func (c *client) Accept() error {
+func (c *client) ReadCommand() error {
 	string, err := c.reader.ReadString('\n')
 	if err == io.EOF {
 		return err
 	}
+	log.Println(err, string)
 
 	string = strings.TrimSpace(string)
 	args := strings.Split(string, " ")
 
 	if cmd, err := c.GetCommand(args); err != nil {
-		c.conn.Write([]byte(err.Error()))
+		c.conn.Write([]byte(err.Error() + "\n"))
 	} else {
 		resp, err := cmd(args[1:]...)
 		if err != nil {
-			c.conn.Write([]byte(err.Error()))
+			c.conn.Write([]byte(err.Error() + "\n"))
 		} else {
-			c.conn.Write([]byte(resp))
+			c.conn.Write([]byte(resp + "\n"))
 		}
 	}
 	return nil
@@ -66,25 +71,25 @@ func (c *client) GetCommand(args []string) (Command, error) {
 	if len(args) < 1 {
 		return nil, ErrUnrecognizedCommand
 	}
-	cmd, ok := c.commands[args[0]]
+	name := strings.ToUpper(args[0])
+	cmd, ok := c.commands[name]
 	if !ok {
 		return nil, ErrUnrecognizedCommand
 	}
 	return cmd, nil
 }
 
-// Maintains a connection to the client.
-type User struct {
-	conn *net.Conn
-}
-
-func (u *User) GetCommandTable() map[string]Command {
-	return nil
-}
-
-type Admin struct {
-}
-
-func (a *Admin) GetCommandTable() map[string]Command {
-	return nil
-}
+// type User struct {
+// 	conn *net.Conn
+// }
+//
+// func (u *User) GetCommandTable() map[string]Command {
+// 	return nil
+// }
+//
+// type Admin struct {
+// }
+//
+// func (a *Admin) GetCommandTable() map[string]Command {
+// 	return nil
+// }

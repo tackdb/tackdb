@@ -3,12 +3,9 @@ package tackdb
 import (
 	"bufio"
 	"errors"
-	"fmt"
 	"log"
 	"net"
 	"path"
-
-	flag "github.com/ogier/pflag"
 )
 
 type Server struct {
@@ -19,6 +16,11 @@ type Server struct {
 }
 
 func NewServer() *Server {
+	fp := path.Join(*configdir, *configname)
+	if err := ReadConfig(fp); err != nil {
+		log.Printf("Error reading config file (%q): %s", fp, err)
+	}
+
 	s := &Server{
 		store: NewStore(),
 	}
@@ -36,7 +38,17 @@ func (s *Server) NoAccept() (net.Conn, error) {
 	return nil, ErrMaxConn
 }
 
+func (s *Server) Listen() *Server {
+	var err error
+	s.listener, err = net.Listen(SCHEME, ":"+config.Port)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return s
+}
+
 func (s *Server) Serve() error {
+	defer s.listener.Close()
 	for {
 		s.clientid++
 		conn, err := s.listener.Accept()
@@ -57,38 +69,6 @@ func (s *Server) Serve() error {
 			reader:   bufio.NewReader(conn),
 			commands: newcommand,
 		}
-		go client.Listen()
+		go client.Run()
 	}
-}
-
-func Serve() error {
-	flag.Parse()
-	fp := path.Join(*configdir, *configname)
-	if err := InitConfig(fp); err != nil {
-		log.Printf("Error reading config file (%q): %s", fp, err)
-	}
-
-	var err error
-	server := NewServer()
-	server.listener, err = net.Listen(SCHEME, ":"+config.Port)
-	if err != nil {
-		return err
-	}
-	defer server.listener.Close()
-
-	//
-	// server := NewServer()
-	// server.listener = connection
-
-	clientid := 1
-	for {
-		client, err := server.listener.Accept()
-		if err != nil {
-			log.Println(err)
-		} else {
-			fmt.Println(client, clientid)
-		}
-		clientid++
-	}
-	return nil
 }

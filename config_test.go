@@ -26,8 +26,8 @@ func TestConfigMerge(t *testing.T) {
 	}
 }
 
-func TestInitConfig(t *testing.T) {
-	err := InitConfig("./testdata/invalidconfig.json")
+func TestReadConfig(t *testing.T) {
+	err := ReadConfig("./testdata/invalidconfig.json")
 	if err == nil {
 		t.Errorf("Expected %s to not be nil", err)
 	}

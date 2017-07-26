@@ -10,20 +10,44 @@ import (
 	"strings"
 
 	flag "github.com/ogier/pflag"
-
 	"gitlab.com/tackdb/tackdb"
 )
 
-var cli = flag.Bool("cli", false, "Connect as client")
+var cli = flag.Bool("cli", false, "Connect as client.")
+var errcli = flag.Bool("errcli", false, "Run errant client.")
 var addr = flag.String("addr", ":3750", "Connection address.")
 
 func main() {
 	flag.Parse()
 
-	if *cli {
+	if *errcli {
+		runErrantClient()
+	} else if *cli {
 		log.Fatal(runClient())
 	} else {
-		log.Fatal(tackdb.Serve())
+		log.Fatal(tackdb.NewServer().Listen().Serve())
+	}
+}
+
+func runErrantClient() {
+	done := make(chan error)
+	for i := 0; i < 20; i++ {
+		go func() {
+			conn, err := net.Dial("tcp", *addr)
+			if err != nil {
+				log.Println(err)
+				done <- err
+			}
+
+			for j := 0; j < 20; j++ {
+				fmt.Fprintf(conn, "SET foo bar\n")
+			}
+			done <- nil
+		}()
+	}
+
+	for i := 0; i < 20; i++ {
+		<-done
 	}
 }
 

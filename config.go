@@ -27,7 +27,19 @@ type Config struct {
 	MaxConnections int    `json:"max-connections"`
 	AdminName      string `json:"admin_username"`
 	AdminPass      string `json:"admin_password"`
+	// Users          []User `json:"users"`
 }
+
+// const (
+// 	RoleAdmin = iota
+// 	RoleUser
+// )
+//
+// type User struct {
+// 	Name string `json:"username"`
+// 	Pass string `json:"password"`
+// 	Role int    `json:"role"`
+// }
 
 // Set configuration to defaults.
 var config = NewDefaults()
@@ -51,7 +63,7 @@ func NewDefaults() *Config {
 	}
 }
 
-func InitConfig(path string) (err error) {
+func ReadConfig(path string) (err error) {
 	if data, err := ioutil.ReadFile(path); err == nil {
 		return config.merge(data)
 	}
