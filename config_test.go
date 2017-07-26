@@ -5,17 +5,6 @@ import (
 	"testing"
 )
 
-func TestMain(m *testing.M) {
-	done := make(chan error)
-	go func() {
-		done <- Serve()
-	}()
-	m.Run()
-	if err := <-done; err != nil {
-		panic(err)
-	}
-}
-
 func TestConfigMerge(t *testing.T) {
 	config := NewDefaults()
 	data := []byte(`{"port":"75000"}`)
