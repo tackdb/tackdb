@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"path"
+	"sync"
 )
 
 type Server struct {
@@ -13,6 +14,7 @@ type Server struct {
 	listener net.Listener
 	handler  func() (net.Conn, error)
 	store    *store
+	mu       sync.RWMutex
 }
 
 func NewServer() *Server {
@@ -23,6 +25,7 @@ func NewServer() *Server {
 
 	s := &Server{
 		store: NewStore(),
+		mu:    sync.RWMutex{},
 	}
 	s.handler = s.Accept
 	return s
@@ -64,11 +67,32 @@ func (s *Server) Serve() error {
 		}
 
 		client := &client{
-			conn:     conn,
-			id:       s.clientid,
-			reader:   bufio.NewReader(conn),
-			commands: newcommand,
+			conn:   conn,
+			id:     s.clientid,
+			reader: bufio.NewReader(conn),
+			// commands: newcommand,
 		}
+		client.addcommandlock(newcommand, &s.mu)
 		go client.Run()
+	}
+}
+
+func (c *client) addcommandlock(commands map[string]Command, mu *sync.RWMutex) {
+	ogbegin := commands["BEGIN"]
+	commands["BEGIN"] = func(args ...string) (string, error) {
+		c.isLocked = true
+		mu.Lock()
+		return ogbegin(args...)
+	}
+
+	ogset := commands["SET"]
+	commands["SET"] = func(args ...string) (string, error) {
+		if c.isLocked {
+			return ogset(args...)
+		} else {
+			mu.Lock()
+			defer mu.Unlock()
+			return ogset(args...)
+		}
 	}
 }

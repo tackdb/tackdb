@@ -26,6 +26,7 @@ type client struct {
 	reader   *bufio.Reader
 	queue    list.List
 	commands map[string]Command
+	isLocked bool
 }
 
 func (c *client) Run() {

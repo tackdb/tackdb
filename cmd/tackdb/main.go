@@ -38,6 +38,7 @@ func runErrantClient() {
 				log.Println(err)
 				done <- err
 			}
+			defer conn.Close()
 
 			for j := 0; j < 20; j++ {
 				fmt.Fprintf(conn, "SET foo bar\n")
@@ -56,6 +57,7 @@ func runClient() error {
 	if err != nil {
 		return err
 	}
+	defer conn.Close()
 
 	serverout := bufio.NewReader(conn)
 	stdin := bufio.NewReader(os.Stdin)
