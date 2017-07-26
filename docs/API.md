@@ -1,0 +1,17 @@
+# API
+
+`SET`
+
+`GET`
+
+`UNSET`
+
+`NUMEQUALTO`
+
+`END`
+
+`BEGIN`
+
+`ROLLBACK`
+
+`COMMIT`
