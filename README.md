@@ -1,5 +1,4 @@
-![TackDB](docs/media/tackdb.svg?raw=true "TackDB logo")
-=======================================================
+# <img src="docs/media/tackdb@2x.png" width="134" height="32" alt="TackDB">
 
 [summary]::
 TackDB is an in-memory key-value store.
