@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync"
 )
 
 type Command func(...string) (string, error)
@@ -27,7 +26,6 @@ type store struct {
 	tables   []table
 	count    counter
 	commands map[string]Command
-	mu       sync.RWMutex
 }
 
 func NewStore() (s *store) {
@@ -67,16 +65,25 @@ func (s *store) begin(...string) (string, error) {
 	return "", nil
 }
 
-func (s *store) stash(key string) (string, error) {
+func (s *store) stash(args ...string) (string, error) {
+	if len(args) < 1 {
+		return "", ErrInvalidArgs
+	}
+	key := args[0]
 	// Check if we are in a transaction.
 	if len(s.tables) < 2 {
 		return "", nil
 	}
 	// If the value from the previous table has not been saved,
 	// save it. If it has, don't override it.
-	current := len(s.tables) - 1
-	if _, ok := s.tables[current][key]; !ok {
-		s.tables[current][key] = s.tables[0][key]
+	current := s.tables[len(s.tables)-1]
+	// current := len(s.tables) - 1
+	if _, ok := current[key]; !ok {
+		if prev, ok := s.tables[0][key]; ok {
+			current[key] = prev
+		} else {
+			current[key] = nil
+		}
 	}
 	return "", nil
 }
@@ -138,6 +145,7 @@ func (s *store) rollback(...string) (string, error) {
 	if tablelen < 2 {
 		return "", ErrNoTransaction
 	}
+
 	var last table
 	last, s.tables = s.tables[tablelen-1], s.tables[:tablelen-1]
 	for key, value := range last {

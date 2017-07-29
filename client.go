@@ -26,10 +26,10 @@ type client struct {
 	reader   *bufio.Reader
 	queue    list.List
 	commands map[string]Command
-	isLocked bool
+	hasLock  bool
 }
 
-func (c *client) Run() {
+func (c *client) Handle() {
 	defer c.conn.Close()
 	var err error
 
@@ -45,6 +45,15 @@ func (c *client) Run() {
 func (c *client) ReadCommand() error {
 	string, err := c.reader.ReadString('\n')
 	if err == io.EOF {
+		if c.hasLock {
+			if rollback, ok := c.commands["ROLLBACK"]; ok {
+				var err error
+				for ; err == nil; _, err = rollback() {
+				}
+			}
+			// defer c.Unlock()
+			// defer s.mu.Unlock()
+		}
 		return err
 	}
 	log.Println(err, string)
@@ -52,10 +61,10 @@ func (c *client) ReadCommand() error {
 	string = strings.TrimSpace(string)
 	args := strings.Split(string, " ")
 
-	if cmd, err := c.GetCommand(args); err != nil {
+	if cmd, err := c.GetCommand(args...); err != nil {
 		c.conn.Write([]byte(err.Error() + "\n"))
 	} else {
-		resp, err := cmd(args[1:]...)
+		resp, err := cmd(args...)
 		if err != nil {
 			c.conn.Write([]byte(err.Error() + "\n"))
 		} else {
@@ -67,8 +76,7 @@ func (c *client) ReadCommand() error {
 
 var ErrUnrecognizedCommand = errors.New("UNRECOGNIZED COMMAND")
 
-// var ErrNoCommand = errors.New("NO COMMAND")
-func (c *client) GetCommand(args []string) (Command, error) {
+func (c *client) GetCommand(args ...string) (Command, error) {
 	if len(args) < 1 {
 		return nil, ErrUnrecognizedCommand
 	}
@@ -80,17 +88,92 @@ func (c *client) GetCommand(args []string) (Command, error) {
 	return cmd, nil
 }
 
-// type User struct {
-// 	conn *net.Conn
-// }
-//
-// func (u *User) GetCommandTable() map[string]Command {
-// 	return nil
-// }
-//
-// type Admin struct {
-// }
-//
-// func (a *Admin) GetCommandTable() map[string]Command {
-// 	return nil
-// }
+func (c *client) Lock() {
+	c.hasLock = true
+}
+func (c *client) Unlock() {
+	c.hasLock = false
+}
+
+var ErrNoLock = errors.New("NOT LOCKED")
+
+func (c *client) NewCommandTable(s *Server) map[string]Command {
+	table := make(map[string]Command)
+
+	table["GET"] = func(args ...string) (string, error) {
+		return RLockUnlock(c, s, func() (string, error) {
+			return s.store.get(args[1:]...)
+		})
+	}
+	table["SET"] = func(args ...string) (string, error) {
+		return LockUnlock(c, s, func() (string, error) {
+			if ret, err := s.store.stash(args[1:]...); err != nil {
+				return ret, err
+			}
+			return s.store.set(args[1:]...)
+		})
+	}
+	table["UNSET"] = func(args ...string) (string, error) {
+		return LockUnlock(c, s, func() (string, error) {
+			if ret, err := s.store.stash(args[1:]...); err != nil {
+				return ret, err
+			}
+			return s.store.unset(args[1:]...)
+		})
+	}
+	table["NUMEQUALTO"] = func(args ...string) (string, error) {
+		return RLockUnlock(c, s, func() (string, error) {
+			return s.store.numequalto(args[1:]...)
+		})
+	}
+	table["BEGIN"] = func(...string) (string, error) {
+		s.mu.Lock()
+		c.Lock()
+		return s.store.begin()
+	}
+	table["COMMIT"] = func(...string) (string, error) {
+		if !c.hasLock {
+			return "", ErrNoLock
+		}
+		defer c.Unlock()
+		defer s.mu.Unlock()
+		return s.store.commit()
+	}
+	table["ROLLBACK"] = func(...string) (string, error) {
+		if !c.hasLock {
+			return "", ErrNoLock
+		}
+		// If we rollback the last transaction, unlock.
+		if len(s.store.tables) == 2 {
+			defer c.Unlock()
+			defer s.mu.Unlock()
+		}
+		return s.store.rollback()
+	}
+
+	return table
+}
+
+func LockUnlock(c *client, s *Server, cb func() (string, error)) (string, error) {
+	if c.hasLock {
+		return cb()
+	} else {
+		s.mu.Lock()
+		c.Lock()
+		defer c.Unlock()
+		defer s.mu.Unlock()
+		return cb()
+	}
+}
+
+func RLockUnlock(c *client, s *Server, cb func() (string, error)) (string, error) {
+	if c.hasLock {
+		return cb()
+	} else {
+		s.mu.RLock()
+		c.Lock()
+		defer c.Unlock()
+		defer s.mu.RUnlock()
+		return cb()
+	}
+}

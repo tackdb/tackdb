@@ -62,38 +62,17 @@ func (s *Server) Serve() error {
 		}
 
 		// Make a new client.
-		newcommand := make(map[string]Command)
-		for name, cmd := range s.store.commands {
-			newcommand[name] = cmd
-		}
-
-		client := &client{
-			conn:   conn,
-			id:     s.clientid,
-			reader: bufio.NewReader(conn),
-			// commands: newcommand,
-		}
-		client.addcommandlock(newcommand, &s.mu)
-		go client.Run()
+		go s.NewClient(conn).Handle()
 	}
 }
 
-func (c *client) addcommandlock(commands map[string]Command, mu *sync.RWMutex) {
-	ogbegin := commands["BEGIN"]
-	commands["BEGIN"] = func(args ...string) (string, error) {
-		c.isLocked = true
-		mu.Lock()
-		return ogbegin(args...)
+func (s *Server) NewClient(conn net.Conn) *client {
+	c := &client{
+		conn:   conn,
+		id:     s.clientid,
+		reader: bufio.NewReader(conn),
 	}
-
-	ogset := commands["SET"]
-	commands["SET"] = func(args ...string) (string, error) {
-		if c.isLocked {
-			return ogset(args...)
-		} else {
-			mu.Lock()
-			defer mu.Unlock()
-			return ogset(args...)
-		}
-	}
+	c.commands = c.NewCommandTable(s)
+	s.clientid++
+	return c
 }
