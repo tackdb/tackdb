@@ -13,9 +13,11 @@ import (
 	"gitlab.com/tackdb/tackdb"
 )
 
-var cli = flag.Bool("cli", false, "Connect as client.")
-var errcli = flag.Bool("errcli", false, "Run errant client.")
-var addr = flag.String("addr", ":3750", "Connection address.")
+var (
+	cli    = flag.Bool("cli", false, "Connect as client.")
+	errcli = flag.Bool("errcli", false, "Run errant client.")
+	addr   = flag.String("addr", ":3750", "Connection address.")
+)
 
 func main() {
 	flag.Parse()
@@ -31,7 +33,7 @@ func main() {
 
 func runErrantClient() {
 	done := make(chan error)
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 200; i++ {
 		go func() {
 			conn, err := net.Dial("tcp", *addr)
 			if err != nil {
@@ -40,8 +42,15 @@ func runErrantClient() {
 			}
 			defer conn.Close()
 
-			for j := 0; j < 20; j++ {
+			for j := 0; j < 200; j++ {
+				fmt.Fprintf(conn, "GET foo\n")
+				fmt.Fprintf(conn, "NUMEQUALTO bar\n")
+				fmt.Fprintf(conn, "BEGIN\n")
 				fmt.Fprintf(conn, "SET foo bar\n")
+				fmt.Fprintf(conn, "UNSET foo\n")
+				fmt.Fprintf(conn, "SET foo bar\n")
+				fmt.Fprintf(conn, "ROLLBACK\n")
+				fmt.Fprintf(conn, "GET foo\n")
 			}
 			done <- nil
 		}()

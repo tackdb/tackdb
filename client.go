@@ -2,7 +2,7 @@ package tackdb
 
 import (
 	"bufio"
-	"container/list"
+	// "container/list"
 	"errors"
 	"io"
 	"log"
@@ -21,10 +21,10 @@ import (
 // try to add to pool
 // Maintains a connection to the client.
 type client struct {
-	conn     net.Conn
-	id       int64
-	reader   *bufio.Reader
-	queue    list.List
+	conn   net.Conn
+	id     int64
+	reader *bufio.Reader
+	// queue    list.List
 	commands map[string]Command
 	hasLock  bool
 }
@@ -127,13 +127,16 @@ func (c *client) NewCommandTable(s *Server) map[string]Command {
 		})
 	}
 	table["BEGIN"] = func(...string) (string, error) {
+		if c.hasLock {
+			return s.store.begin()
+		}
 		s.mu.Lock()
 		c.Lock()
 		return s.store.begin()
 	}
 	table["COMMIT"] = func(...string) (string, error) {
 		if !c.hasLock {
-			return "", ErrNoLock
+			return "", ErrNoTransaction
 		}
 		defer c.Unlock()
 		defer s.mu.Unlock()
@@ -141,7 +144,7 @@ func (c *client) NewCommandTable(s *Server) map[string]Command {
 	}
 	table["ROLLBACK"] = func(...string) (string, error) {
 		if !c.hasLock {
-			return "", ErrNoLock
+			return "", ErrNoTransaction
 		}
 		// If we rollback the last transaction, unlock.
 		if len(s.store.tables) == 2 {

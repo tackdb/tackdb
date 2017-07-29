@@ -9,6 +9,8 @@ import (
 	"sync"
 )
 
+var ErrMaxConn = errors.New("Reached max connections.")
+
 type Server struct {
 	clientid int64
 	listener net.Listener
@@ -35,8 +37,6 @@ func (s *Server) Accept() (net.Conn, error) {
 	return s.listener.Accept()
 }
 
-var ErrMaxConn = errors.New("Reached max connections.")
-
 func (s *Server) NoAccept() (net.Conn, error) {
 	return nil, ErrMaxConn
 }
@@ -61,7 +61,7 @@ func (s *Server) Serve() error {
 			continue
 		}
 
-		// Make a new client.
+		// Make a new client and serve in a new goroutine.
 		go s.NewClient(conn).Handle()
 	}
 }
