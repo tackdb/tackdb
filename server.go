@@ -48,7 +48,6 @@ func (s *Server) NoAccept() (net.Conn, error) {
 
 func (s *Server) Listen() *Server {
 	var err error
-	log.Println(*port)
 	log.Println("TackDB", "v"+VERSION, "Listening on", config.Port)
 	s.listener, err = net.Listen(SCHEME, ":"+config.Port)
 	if err != nil {
