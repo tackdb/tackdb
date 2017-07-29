@@ -4,7 +4,7 @@ import (
 	"log"
 
 	flag "github.com/ogier/pflag"
-	"gitlab.com/tackdb/tackdb"
+	"github.com/tackdb/tackdb"
 )
 
 func main() {

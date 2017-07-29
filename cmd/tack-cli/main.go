@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	flag "github.com/ogier/pflag"
-	"gitlab.com/tackdb/tackdb"
+	"github.com/tackdb/tackdb"
 )
 
 var (
