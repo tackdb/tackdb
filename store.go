@@ -6,22 +6,16 @@ import (
 	"strings"
 )
 
+// command describes the form that parsed arguments must conform to.
 type Command func(...string) (string, error)
 
-type Store interface {
-	Get(string) (string, error)
-	Set(string, string) (string, error)
-	Unset(string) (string, error)
-	Numequalto(string) (string, error)
-	End() (string, error)
-	Begin() (string, error)
-	Rollback() (string, error)
-	Commit() (string, error)
-}
-
+// table is the basic key-value datatable type.
 type table map[string]*string
+
+// counter maps values to their counts.
 type counter map[string]int
 
+// store manages the key-value tables.
 type store struct {
 	tables   []table
 	count    counter

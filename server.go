@@ -11,6 +11,8 @@ import (
 
 var ErrMaxConn = errors.New("Reached max connections.")
 
+// Server manages the TCP connection and client pool.
+// Each client references the data store and mutex.
 type Server struct {
 	clientid int64
 	listener net.Listener
@@ -20,14 +22,17 @@ type Server struct {
 }
 
 func NewServer() *Server {
+	config = *NewDefaults()
+
 	fp := path.Join(*configdir, *configname)
 	if err := ReadConfig(fp); err != nil {
 		log.Printf("Error reading config file (%q): %s", fp, err)
 	}
 
 	s := &Server{
-		store: NewStore(),
-		mu:    sync.RWMutex{},
+		store:    NewStore(),
+		mu:       sync.RWMutex{},
+		clientid: 1,
 	}
 	s.handler = s.Accept
 	return s
@@ -43,7 +48,8 @@ func (s *Server) NoAccept() (net.Conn, error) {
 
 func (s *Server) Listen() *Server {
 	var err error
-	log.Println("Listening on", config.Port)
+	log.Println(*port)
+	log.Println("TackDB", "v"+VERSION, "Listening on", config.Port)
 	s.listener, err = net.Listen(SCHEME, ":"+config.Port)
 	if err != nil {
 		log.Fatal(err)
@@ -54,11 +60,9 @@ func (s *Server) Listen() *Server {
 func (s *Server) Serve() error {
 	defer s.listener.Close()
 	for {
-		s.clientid++
 		conn, err := s.listener.Accept()
 		if err != nil {
-			log.Println(err)
-			continue
+			return err
 		}
 
 		// Make a new client and serve in a new goroutine.
@@ -72,7 +76,7 @@ func (s *Server) NewClient(conn net.Conn) *client {
 		id:     s.clientid,
 		reader: bufio.NewReader(conn),
 	}
-	c.commands = c.NewCommandTable(s)
+	c.commands = c.newCommandTable(s)
 	s.clientid++
 	return c
 }

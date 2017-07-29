@@ -2,7 +2,6 @@ package tackdb
 
 import (
 	"bufio"
-	// "container/list"
 	"errors"
 	"io"
 	"log"
@@ -10,21 +9,20 @@ import (
 	"strings"
 )
 
-// type Client interface {
-// 	GetCommandTable() map[string]Command
-// }
+var ErrUnrecognizedCommand = errors.New("UNRECOGNIZED COMMAND")
 
+// TODO: Basic authentication.
 // client should peek first line
 // if the first line is an AUTH statement,
 // authenticate client and then connect
 // if first line is not authenticate,
-// try to add to pool
-// Maintains a connection to the client.
+// return error if authentication is required
+
+// client describes an individual connection to the server.
 type client struct {
-	conn   net.Conn
-	id     int64
-	reader *bufio.Reader
-	// queue    list.List
+	conn     net.Conn
+	id       int64
+	reader   *bufio.Reader
 	commands map[string]Command
 	hasLock  bool
 }
@@ -33,7 +31,7 @@ func (c *client) Handle() {
 	defer c.conn.Close()
 	var err error
 
-	log.Println(c.id)
+	log.Println("Connection received. Client", c.id)
 
 	for {
 		if err = c.ReadCommand(); err != nil {
@@ -45,18 +43,17 @@ func (c *client) Handle() {
 func (c *client) ReadCommand() error {
 	string, err := c.reader.ReadString('\n')
 	if err == io.EOF {
+		// Client closed the connection.
+		// Cancel any outstanding transactions.
 		if c.hasLock {
 			if rollback, ok := c.commands["ROLLBACK"]; ok {
 				var err error
 				for ; err == nil; _, err = rollback() {
 				}
 			}
-			// defer c.Unlock()
-			// defer s.mu.Unlock()
 		}
 		return err
 	}
-	log.Println(err, string)
 
 	string = strings.TrimSpace(string)
 	args := strings.Split(string, " ")
@@ -73,8 +70,6 @@ func (c *client) ReadCommand() error {
 	}
 	return nil
 }
-
-var ErrUnrecognizedCommand = errors.New("UNRECOGNIZED COMMAND")
 
 func (c *client) GetCommand(args ...string) (Command, error) {
 	if len(args) < 1 {
@@ -95,18 +90,16 @@ func (c *client) Unlock() {
 	c.hasLock = false
 }
 
-var ErrNoLock = errors.New("NOT LOCKED")
-
-func (c *client) NewCommandTable(s *Server) map[string]Command {
+func (c *client) newCommandTable(s *Server) map[string]Command {
 	table := make(map[string]Command)
 
 	table["GET"] = func(args ...string) (string, error) {
-		return RLockUnlock(c, s, func() (string, error) {
+		return rLockUnlock(c, s, func() (string, error) {
 			return s.store.get(args[1:]...)
 		})
 	}
 	table["SET"] = func(args ...string) (string, error) {
-		return LockUnlock(c, s, func() (string, error) {
+		return lockUnlock(c, s, func() (string, error) {
 			if ret, err := s.store.stash(args[1:]...); err != nil {
 				return ret, err
 			}
@@ -114,7 +107,7 @@ func (c *client) NewCommandTable(s *Server) map[string]Command {
 		})
 	}
 	table["UNSET"] = func(args ...string) (string, error) {
-		return LockUnlock(c, s, func() (string, error) {
+		return lockUnlock(c, s, func() (string, error) {
 			if ret, err := s.store.stash(args[1:]...); err != nil {
 				return ret, err
 			}
@@ -122,7 +115,7 @@ func (c *client) NewCommandTable(s *Server) map[string]Command {
 		})
 	}
 	table["NUMEQUALTO"] = func(args ...string) (string, error) {
-		return RLockUnlock(c, s, func() (string, error) {
+		return rLockUnlock(c, s, func() (string, error) {
 			return s.store.numequalto(args[1:]...)
 		})
 	}
@@ -157,7 +150,11 @@ func (c *client) NewCommandTable(s *Server) map[string]Command {
 	return table
 }
 
-func LockUnlock(c *client, s *Server, cb func() (string, error)) (string, error) {
+// lockUnlock wraps the callback with the server mutex lock and client lock.
+// If the client already has the lock, then execute the callback with locking.
+// Though the server handles concurrent client connections, each client
+// connection can only send commands sequentially.
+func lockUnlock(c *client, s *Server, cb func() (string, error)) (string, error) {
 	if c.hasLock {
 		return cb()
 	} else {
@@ -169,7 +166,9 @@ func LockUnlock(c *client, s *Server, cb func() (string, error)) (string, error)
 	}
 }
 
-func RLockUnlock(c *client, s *Server, cb func() (string, error)) (string, error) {
+// rLockUnlock wraps the callback with the server mutex read lock and client lock.
+// If the client already has the lock, then execute the callback without read lock.
+func rLockUnlock(c *client, s *Server, cb func() (string, error)) (string, error) {
 	if c.hasLock {
 		return cb()
 	} else {

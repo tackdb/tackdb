@@ -10,16 +10,16 @@ import (
 
 const (
 	SCHEME  = "tcp"
-	VERSION = "0.0.1"
+	VERSION = "0.1.0"
 )
 
 var (
 	configname = flag.String("confname", "tackdb.conf", "Filename of TackDB runtime configuration file.")
 	configdir  = flag.StringP("dir", "d", os.Getenv("HOME"), "Directory location of runtime configuration file (.tackrc).")
 	port       = flag.StringP("port", "p", "3750", "TCP service port.")
-	maxconns   = flag.IntP("max-connections", "m", 0, "Maximum connections, setting to 0 will not limit the number of connections.")
-	adminname  = flag.String("admin-name", "admin", "Username of admin user.")
-	adminpass  = flag.String("admin-pass", "pass", "Password of admin user.")
+	// maxconns   = flag.IntP("max-connections", "m", 0, "Maximum connections, setting to 0 will not limit the number of connections.")
+	// adminname  = flag.String("admin-name", "admin", "Username of admin user.")
+	// adminpass  = flag.String("admin-pass", "pass", "Password of admin user.")
 )
 
 type Config struct {
@@ -30,14 +30,14 @@ type Config struct {
 }
 
 // Set configuration to defaults.
-var config = NewDefaults()
+var config Config
 
 func NewDefaults() *Config {
 	return &Config{
 		Port:           *port,
-		MaxConnections: *maxconns,
-		AdminName:      *adminname,
-		AdminPass:      *adminpass,
+		// MaxConnections: *maxconns,
+		// AdminName:      *adminname,
+		// AdminPass:      *adminpass,
 	}
 }
 
